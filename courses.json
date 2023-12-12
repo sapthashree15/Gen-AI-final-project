@@ -1,0 +1,19 @@
+[
+    {
+      "name": "Introduction to Programming",
+      "description": "Learn the basics of programming with this introductory course."
+    },
+    {
+      "name": "Web Development Fundamentals",
+      "description": "Explore the fundamentals of web development, including HTML, CSS, and JavaScript."
+    },
+    {
+      "name": "Data Science Essentials",
+      "description": "Dive into the essentials of data science and analytics in this comprehensive course."
+    },
+    {
+      "name": "Mobile App Development",
+      "description": "Build mobile apps for iOS and Android platforms with this hands-on course."
+    }
+  ]
+  

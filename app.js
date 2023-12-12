@@ -1,113 +1,131 @@
 const express = require('express');
-const { MongoClient, ObjectId } = require('mongodb');
+const mongoose = require('mongoose');
+const bodyParser = require('body-parser');
+const fs = require('fs');
 
 const app = express();
-const port = 3000;
-const mongoUrl = 'mongodb://sapthashreek-8081.theiadockernext-0-labs-prod-theiak8s-4-tor01.proxy.cognitiveclass.ai';
+const PORT = 3030;
 
-const dbName = 'learning-platform';
-const collectionName = 'courses';
+app.use(bodyParser.json());
 
-app.use(express.json());
+// MongoDB connection
+const username = 'sapthashreek';
+const password = 'MjY4NTItc2FwdGhh';
+const host = '127.0.0.1';
+const port = '27017';
+const databaseName = 'courses'; // Replace with your actual database name
 
-// Connect to the MongoDB database
-MongoClient.connect(mongoUrl, { useUnifiedTopology: true })
-  .then(client => {
-    const db = client.db(dbName);
-    const collection = db.collection(collectionName);
+const connectionString = `mongodb://${username}:${password}@${host}:${port}/${databaseName}`;
 
-    // Create a new course
-    app.post('/courses', (req, res) => {
-      const { name, description } = req.body;
-      const newCourse = { name, description };
+mongoose.connect(connectionString, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+});
 
-      collection.insertOne(newCourse)
-        .then(result => {
-          res.status(201).json(result.ops[0]);
-        })
-        .catch(error => {
-          console.error(error);
-          res.status(500).send('Error creating the course');
-        });
-    });
+const db = mongoose.connection;
 
-    // Get all courses
-    app.get('/courses', (req, res) => {
-      collection.find().toArray()
-        .then(courses => {
-          res.json(courses);
-        })
-        .catch(error => {
-          console.error(error);
-          res.status(500).send('Error getting the courses');
-        });
-    });
+db.on('error', console.error.bind(console, 'MongoDB connection error:'));
+db.once('open', () => {
+  console.log('Connected to MongoDB');
+  initializeData(); // Call the function to initialize data from courses.json
+});
 
-    // Get a specific course
-    app.get('/courses/:id', (req, res) => {
-      const courseId = req.params.id;
+// Define Mongoose schema
+const courseSchema = new mongoose.Schema({
+  title: String,
+  description: String,
+});
 
-      collection.findOne({ _id: ObjectId(courseId) })
-        .then(course => {
-          if (course) {
-            res.json(course);
-          } else {
-            res.status(404).send('Course not found');
-          }
-        })
-        .catch(error => {
-          console.error(error);
-          res.status(500).send('Error getting the course');
-        });
-    });
+// Create Mongoose model
+const Course = mongoose.model('Course', courseSchema);
 
-    // Update a course
-    app.put('/courses/:id', (req, res) => {
-      const courseId = req.params.id;
-      const { name, description } = req.body;
-      const updatedCourse = { name, description };
+// Function to initialize data from courses.json
+function initializeData() {
+  const coursesData = fs.readFileSync('courses.json', 'utf-8');
+  const coursesArray = JSON.parse(coursesData);
 
-      collection.findOneAndUpdate(
-        { _id: ObjectId(courseId) },
-        { $set: updatedCourse },
-        { returnOriginal: false }
-      )
-        .then(result => {
-          if (result.value) {
-            res.json(result.value);
-          } else {
-            res.status(404).send('Course not found');
-          }
-        })
-        .catch(error => {
-          console.error(error);
-          res.status(500).send('Error updating the course');
-        });
-    });
-
-    // Delete a course
-    app.delete('/courses/:id', (req, res) => {
-      const courseId = req.params.id;
-
-      collection.findOneAndDelete({ _id: ObjectId(courseId) })
-        .then(result => {
-          if (result.value) {
-            res.json(result.value);
-          } else {
-            res.status(404).send('Course not found');
-          }
-        })
-        .catch(error => {
-          console.error(error);
-          res.status(500).send('Error deleting the course');
-        });
-    });
-
-    // Start the server
-    app.listen(port, () => {
-      console.log(`Server is running on port ${port}`);
-    });
-  })
-  .catch(error => {
-    console.error('Error connecting to the database:', error);
+  // Insert data into MongoDB
+  Course.insertMany(coursesArray, (error, result) => {
+    if (error) {
+      console.error('Error initializing data:', error);
+    } else {
+      console.log('Data initialized successfully:', result);
+    }
   });
+}
+
+// CRUD endpoints
+
+// Create (add a new course)
+app.post('/courses', async (req, res) => {
+  try {
+    const newCourse = await Course.create(req.body);
+    res.json(newCourse);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Read (get all courses)
+app.get('/courses', async (req, res) => {
+  try {
+    const courses = await Course.find();
+    res.json(courses);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Read (get one course by ID)
+app.get('/courses/:id', async (req, res) => {
+  try {
+    const course = await Course.findById(req.params.id);
+    
+    if (!course) {
+      return res.status(404).json({ error: 'Course not found' });
+    }
+
+    res.json(course);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update (update one course by ID)
+app.put('/courses/:id', async (req, res) => {
+  try {
+    const updatedCourse = await Course.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true }
+    );
+
+    if (!updatedCourse) {
+      return res.status(404).json({ error: 'Course not found' });
+    }
+
+    res.json(updatedCourse);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete (delete one course by ID)
+app.delete('/courses/:id', async (req, res) => {
+  try {
+    const deletedCourse = await Course.findByIdAndDelete(req.params.id);
+
+    if (!deletedCourse) {
+      return res.status(404).json({ error: 'Course not found' });
+    }
+
+    res.json(deletedCourse);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Run the server
+app.listen(PORT, () => {
+  console.log(`Server is running on http://localhost:${PORT}`);
+});
